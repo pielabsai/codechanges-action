@@ -14,12 +14,36 @@ runs:
       shell: bash
       run: |
         # Extract PR information from GitHub context
-        AUTHOR="${{ github.event.pull_request.user.login || github.actor }}"
-        MERGE_COMMIT="${{ github.event.pull_request.merge_commit_sha || github.sha }}"
-        PR_NUMBER="${{ github.event.pull_request.number || github.event.issue.number }}"
-        PR_TITLE="${{ github.event.pull_request.title || github.event.issue.title }}"
-        PR_URL="${{ github.event.pull_request.html_url || github.event.issue.html_url }}"
         REPOSITORY="${{ github.repository }}"
+        MERGE_COMMIT="${{ github.sha }}"
+        
+        # Check if this is a pull_request event
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          AUTHOR="${{ github.event.pull_request.user.login }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          MERGE_COMMIT="${{ github.event.pull_request.merge_commit_sha || github.sha }}"
+        else
+          # For push events, fetch PR info from the commit
+          echo "Fetching PR information for commit $MERGE_COMMIT..."
+          
+          pr_data=$(curl -s -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/$REPOSITORY/commits/$MERGE_COMMIT/pulls")
+          
+          if [ "$(echo "$pr_data" | jq '. | length')" -gt 0 ]; then
+            PR_NUMBER=$(echo "$pr_data" | jq -r '.[0].number')
+            PR_TITLE=$(echo "$pr_data" | jq -r '.[0].title')
+            PR_URL=$(echo "$pr_data" | jq -r '.[0].html_url')
+            AUTHOR=$(echo "$pr_data" | jq -r '.[0].user.login')
+          else
+            # Fallback if no PR found
+            AUTHOR="${{ github.actor }}"
+            PR_NUMBER=""
+            PR_TITLE="${{ github.event.head_commit.message }}"
+            PR_URL=""
+          fi
+        fi
 
         echo "Code Changes Information:"
         echo "  Author: $AUTHOR"
@@ -31,7 +55,8 @@ runs:
 
         # Validate required fields
         if [ -z "$PR_NUMBER" ]; then
-          echo "Warning: PR number not found. This action should be triggered on pull request events."
+          echo "Error: PR number not found. Unable to track code changes without PR information."
+          exit 1
         fi
 
         # Prepare JSON payload
