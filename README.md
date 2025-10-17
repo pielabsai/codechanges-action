@@ -30,10 +30,9 @@ To use this action in your GitHub workflow, add the following step to your `.git
 
 ## Inputs
 
-| Input | Description | Required | Default |
-|-------|-------------|----------|---------|
-| `pie_api_key` | Your Pie API key for authentication. Should be stored as a GitHub secret. | Yes | - |
-| `api_url` | Pie API base URL. Override for testing or custom deployments. | No | `https://api.pie.inc` |
+| Input | Description | Required |
+|-------|-------------|----------|
+| `pie_api_key` | Your Pie API key for authentication. Should be stored as a GitHub secret. | Yes |
 
 ## Captured Information
 
@@ -101,16 +100,6 @@ jobs:
         uses: pielabsai/codechanges-action@v1.0
         with:
           pie_api_key: ${{ secrets.PIE_API_KEY }}
-```
-
-### With Custom API URL (for testing)
-
-```yaml
-- name: Track Code Changes
-  uses: pielabsai/codechanges-action@v1.0
-  with:
-    pie_api_key: ${{ secrets.PIE_API_KEY }}
-    api_url: http://localhost:8080
 ```
 
 ## Trigger Strategies
@@ -198,16 +187,6 @@ Verify that:
 1. Your `PIE_API_KEY` secret is set correctly in GitHub repository settings
 2. The API key is valid and not expired
 3. Your account has permission to access the API
-
-### Wrong API URL
-
-If using a custom deployment, make sure to set the `api_url` input:
-
-```yaml
-with:
-  pie_api_key: ${{ secrets.PIE_API_KEY }}
-  api_url: https://your-custom-api.com
-```
 
 ## Support
 

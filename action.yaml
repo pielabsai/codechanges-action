@@ -6,10 +6,6 @@ inputs:
   pie_api_key:
     description: "Pie API Key for authentication"
     required: true
-  api_url:
-    description: "Pie API URL"
-    required: false
-    default: "https://api.pie.inc"
 
 runs:
   using: "composite"
@@ -55,7 +51,7 @@ runs:
         
         # Upload to Pie API
         response=$(curl -X POST \
-          "${{ inputs.api_url }}/v1/app/codechanges" \
+          "https://api.pie.inc/v1/app/codechanges" \
           -H "accept: application/json" \
           -H "Content-Type: application/json" \
           -H "X-Requested-With: XMLHttpRequest" \
