@@ -102,7 +102,7 @@ jobs:
           pie_api_key: ${{ secrets.PIE_API_KEY }}
 ```
 
-## Trigger Strategies
+## Trigger Strategie
 
 ### 1. On PR Merge (Recommended)
 
