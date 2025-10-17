@@ -1,9 +1,10 @@
 name: Test Code Changes Tracker
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, closed]
-  workflow_dispatch:  # Allows manual testing from GitHub UI
+  push:
+    branches:
+      - main
+# Allows manual testing from GitHub UI
 
 jobs:
   test-codechanges:
