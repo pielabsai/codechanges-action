@@ -28,8 +28,12 @@ runs:
           # For push events, fetch PR info from the commit
           echo "Fetching PR information for commit $MERGE_COMMIT..."
           
-          pr_data=$(curl -s -H "Accept: application/vnd.github.v3+json" \
+          pr_data=$(curl -s \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${{ github.token }}" \
             "https://api.github.com/repos/$REPOSITORY/commits/$MERGE_COMMIT/pulls")
+          
+          echo "API Response: $pr_data"
           
           if [ "$(echo "$pr_data" | jq '. | length')" -gt 0 ]; then
             PR_NUMBER=$(echo "$pr_data" | jq -r '.[0].number')
@@ -37,11 +41,21 @@ runs:
             PR_URL=$(echo "$pr_data" | jq -r '.[0].html_url')
             AUTHOR=$(echo "$pr_data" | jq -r '.[0].user.login')
           else
-            # Fallback if no PR found
-            AUTHOR="${{ github.actor }}"
-            PR_NUMBER=""
-            PR_TITLE="${{ github.event.head_commit.message }}"
-            PR_URL=""
+            # Try to extract PR number from commit message (e.g., "Merge pull request #123")
+            commit_message="${{ github.event.head_commit.message }}"
+            if [[ "$commit_message" =~ \#([0-9]+) ]]; then
+              PR_NUMBER="${BASH_REMATCH[1]}"
+              PR_TITLE="$commit_message"
+              PR_URL="https://github.com/$REPOSITORY/pull/$PR_NUMBER"
+              AUTHOR="${{ github.actor }}"
+              echo "Extracted PR #$PR_NUMBER from commit message"
+            else
+              # No PR found - this might be a direct push
+              AUTHOR="${{ github.actor }}"
+              PR_NUMBER=""
+              PR_TITLE="$commit_message"
+              PR_URL=""
+            fi
           fi
         fi
 
