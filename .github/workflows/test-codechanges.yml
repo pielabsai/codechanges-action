@@ -1,0 +1,19 @@
+name: Test Code Changes Tracker
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  workflow_dispatch:  # Allows manual testing from GitHub UI
+
+jobs:
+  test-codechanges:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Test Code Changes Action
+        uses: ./  # Uses the action from current repository
+        with:
+          pie_api_key: ${{ secrets.PIE_API_KEY }}
+
