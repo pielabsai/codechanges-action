@@ -73,19 +73,26 @@ runs:
           exit 1
         fi
 
-        # Prepare JSON payload
-        json_payload=$(cat <<EOF
-        {
-          "author": "$AUTHOR",
-          "mergeCommit": "$MERGE_COMMIT",
-          "prNumber": "$PR_NUMBER",
-          "prTitle": "$PR_TITLE",
-          "prUrl": "$PR_URL",
-          "repository": "$REPOSITORY"
-        }
-        EOF
-        )
+        # Prepare JSON payload using jq to properly escape values
+        json_payload=$(jq -n \
+          --arg author "$AUTHOR" \
+          --arg mergeCommit "$MERGE_COMMIT" \
+          --arg prNumber "$PR_NUMBER" \
+          --arg prTitle "$PR_TITLE" \
+          --arg prUrl "$PR_URL" \
+          --arg repository "$REPOSITORY" \
+          '{
+            author: $author,
+            mergeCommit: $mergeCommit,
+            prNumber: $prNumber,
+            prTitle: $prTitle,
+            prUrl: $prUrl,
+            repository: $repository
+          }')
 
+        echo "JSON Payload:"
+        echo "$json_payload"
+        echo ""
         echo "Sending code changes to Pie API..."
         
         # Upload to Pie API
