@@ -26,14 +26,10 @@ runs:
           MERGE_COMMIT="${{ github.event.pull_request.merge_commit_sha || github.sha }}"
         else
           # For push events, fetch PR info from the commit
-          echo "Fetching PR information for commit $MERGE_COMMIT..."
-          
           pr_data=$(curl -s \
             -H "Accept: application/vnd.github.v3+json" \
             -H "Authorization: token ${{ github.token }}" \
             "https://api.github.com/repos/$REPOSITORY/commits/$MERGE_COMMIT/pulls")
-          
-          echo "API Response: $pr_data"
           
           if [ "$(echo "$pr_data" | jq '. | length')" -gt 0 ]; then
             PR_NUMBER=$(echo "$pr_data" | jq -r '.[0].number')
@@ -48,7 +44,6 @@ runs:
               PR_TITLE="$commit_message"
               PR_URL="https://github.com/$REPOSITORY/pull/$PR_NUMBER"
               AUTHOR="${{ github.actor }}"
-              echo "Extracted PR #$PR_NUMBER from commit message"
             else
               # No PR found - this might be a direct push
               AUTHOR="${{ github.actor }}"
@@ -59,13 +54,7 @@ runs:
           fi
         fi
 
-        echo "Code Changes Information:"
-        echo "  Author: $AUTHOR"
-        echo "  Merge Commit: $MERGE_COMMIT"
-        echo "  PR Number: $PR_NUMBER"
-        echo "  PR Title: $PR_TITLE"
-        echo "  PR URL: $PR_URL"
-        echo "  Repository: $REPOSITORY"
+        echo "Tracking code changes for PR #$PR_NUMBER in $REPOSITORY"
 
         # Validate required fields
         if [ -z "$PR_NUMBER" ]; then
@@ -90,11 +79,6 @@ runs:
             repository: $repository
           }')
 
-        echo "JSON Payload:"
-        echo "$json_payload"
-        echo ""
-        echo "Sending code changes to Pie API..."
-        
         # Upload to Pie API
         response=$(curl -X POST \
           "https://api.pie.inc/v1/app/codechanges" \
@@ -110,18 +94,13 @@ runs:
         http_code=$(echo "$response" | grep "HTTP_STATUS:" | cut -d':' -f2)
         response_body=$(echo "$response" | sed '/HTTP_STATUS:/d')
 
-        echo "Response from Pie API:"
-        echo "$response_body"
-        echo "HTTP status code: $http_code"
-
         # Check for successful response (200 or 201)
         if [ "$http_code" != "200" ] && [ "$http_code" != "201" ]; then
-          echo "Error: Failed to upload code changes to Pie API - received HTTP status code $http_code"
-          echo "Response body: $response_body"
+          echo "Error: Failed to upload code changes (HTTP $http_code)"
           exit 1
         fi
 
-        echo "Successfully uploaded code changes to Pie (HTTP status code: $http_code)"
+        echo "✓ Successfully tracked code changes for PR #$PR_NUMBER"
 
 branding:
   icon: "git-pull-request"
