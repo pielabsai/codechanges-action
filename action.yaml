@@ -1,0 +1,87 @@
+name: "Pie Code Changes Tracker"
+description: "Automatically track and upload PR code changes to Pie"
+author: "Pie"
+
+inputs:
+  pie_api_key:
+    description: "Pie API Key for authentication"
+    required: true
+  api_url:
+    description: "Pie API URL"
+    required: false
+    default: "https://api.pie.inc"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Extract and Upload Code Changes
+      shell: bash
+      run: |
+        # Extract PR information from GitHub context
+        AUTHOR="${{ github.event.pull_request.user.login || github.actor }}"
+        MERGE_COMMIT="${{ github.event.pull_request.merge_commit_sha || github.sha }}"
+        PR_NUMBER="${{ github.event.pull_request.number || github.event.issue.number }}"
+        PR_TITLE="${{ github.event.pull_request.title || github.event.issue.title }}"
+        PR_URL="${{ github.event.pull_request.html_url || github.event.issue.html_url }}"
+        REPOSITORY="${{ github.repository }}"
+
+        echo "Code Changes Information:"
+        echo "  Author: $AUTHOR"
+        echo "  Merge Commit: $MERGE_COMMIT"
+        echo "  PR Number: $PR_NUMBER"
+        echo "  PR Title: $PR_TITLE"
+        echo "  PR URL: $PR_URL"
+        echo "  Repository: $REPOSITORY"
+
+        # Validate required fields
+        if [ -z "$PR_NUMBER" ]; then
+          echo "Warning: PR number not found. This action should be triggered on pull request events."
+        fi
+
+        # Prepare JSON payload
+        json_payload=$(cat <<EOF
+        {
+          "author": "$AUTHOR",
+          "mergeCommit": "$MERGE_COMMIT",
+          "prNumber": "$PR_NUMBER",
+          "prTitle": "$PR_TITLE",
+          "prUrl": "$PR_URL",
+          "repository": "$REPOSITORY"
+        }
+        EOF
+        )
+
+        echo "Sending code changes to Pie API..."
+        
+        # Upload to Pie API
+        response=$(curl -X POST \
+          "${{ inputs.api_url }}/v1/app/codechanges" \
+          -H "accept: application/json" \
+          -H "Content-Type: application/json" \
+          -H "X-Requested-With: XMLHttpRequest" \
+          -H "X-API-Key: ${{ inputs.pie_api_key }}" \
+          -d "$json_payload" \
+          -w "\nHTTP_STATUS:%{http_code}" \
+          -s)
+
+        # Extract HTTP status code
+        http_code=$(echo "$response" | grep "HTTP_STATUS:" | cut -d':' -f2)
+        response_body=$(echo "$response" | sed '/HTTP_STATUS:/d')
+
+        echo "Response from Pie API:"
+        echo "$response_body"
+        echo "HTTP status code: $http_code"
+
+        # Check for successful response (200 or 201)
+        if [ "$http_code" != "200" ] && [ "$http_code" != "201" ]; then
+          echo "Error: Failed to upload code changes to Pie API - received HTTP status code $http_code"
+          echo "Response body: $response_body"
+          exit 1
+        fi
+
+        echo "Successfully uploaded code changes to Pie (HTTP status code: $http_code)"
+
+branding:
+  icon: "git-pull-request"
+  color: "purple"
+
