@@ -1,4 +1,4 @@
-# Pie Code Changes Tracker GitHub Action
+# Pie Code Changes Tracker GitHub Action to increase Coverage
 
 This GitHub Action automatically tracks and uploads pull request code changes to Pie's platform. It captures PR metadata including author, commit info, PR number, title, and URL.
 
