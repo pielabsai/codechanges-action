@@ -4,7 +4,11 @@ on:
   push:
     branches:
       - main
-# Allows manual testing from GitHub UI
+      - feature/diff-capture  # For testing
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:  # Allows manual trigger from GitHub UI
 
 jobs:
   test-codechanges:
