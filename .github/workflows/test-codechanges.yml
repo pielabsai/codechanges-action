@@ -17,9 +17,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Debug - Print API Key
+      - name: Debug - Print API Key (partial)
         run: |
-          echo "Using API Key: ${{ secrets.PIE_API_KEY }}"
+          KEY="${{ secrets.PIE_API_KEY }}"
+          echo "API Key first 10 chars: ${KEY:0:10}"
+          echo "API Key last 5 chars: ${KEY: -5}"
+          echo "API Key length: ${#KEY}"
 
       - name: Test Code Changes Action
         uses: ./  # Uses the action from current repository
