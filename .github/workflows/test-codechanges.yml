@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-# Allows manual testing from GitHub UI
+  workflow_dispatch:  # Allows manual trigger from GitHub UI
 
 jobs:
   test-codechanges:
@@ -12,9 +12,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
-      - name: Debug - Print API Key
-        run: echo "Using API Key: ${{ secrets.PIE_API_KEY }}"
 
       - name: Test Code Changes Action
         uses: ./  # Uses the action from current repository

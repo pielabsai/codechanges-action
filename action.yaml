@@ -89,24 +89,8 @@ runs:
           deletions: .deletions
         }]')
 
-        # Debug: Print captured metadata
-        echo ""
-        echo "========== DEBUG: PR METADATA =========="
-        echo "Repository: $REPOSITORY"
-        echo "PR Number: $PR_NUMBER"
-        echo "PR Title: $PR_TITLE"
-        echo "Author: $AUTHOR"
-        echo "Merge Commit: $MERGE_COMMIT"
-        echo "Base Branch: $BASE_BRANCH"
-        echo "Head Branch: $HEAD_BRANCH"
-        echo ""
-
-        # Debug: Print files captured
-        echo "========== DEBUG: FILES CHANGED =========="
         file_count=$(echo "$files_json" | jq '. | length')
-        echo "Total files changed: $file_count"
-        echo "$files_json" | jq -r '.[] | "  \(.status): \(.filename) (+\(.additions)/-\(.deletions))"'
-        echo ""
+        echo "Found $file_count changed files"
 
         # Fetch full unified diff if enabled
         DIFF_CONTENT=""
@@ -123,15 +107,7 @@ runs:
             echo "Warning: Diff too large ($DIFF_SIZE bytes), truncating to 10MB"
             DIFF_CONTENT="${DIFF_CONTENT:0:10000000}"
           fi
-
-          # Debug: Print diff info
-          echo "========== DEBUG: DIFF CAPTURED =========="
           echo "Diff size: $DIFF_SIZE bytes"
-          echo "First 500 chars of diff:"
-          echo "---"
-          echo "${DIFF_CONTENT:0:500}"
-          echo "---"
-          echo ""
         fi
 
         # Prepare JSON payload using jq to properly escape values
@@ -183,20 +159,6 @@ runs:
           exit 1
         fi
 
-        # Debug: Print full API response
-        echo "========== DEBUG: API RESPONSE =========="
-        echo "HTTP Status: $http_code"
-        echo "Response body:"
-        echo "$response_body" | jq '.'
-        echo ""
-
-        # Extract diffGcsPath from response if present
-        diff_gcs_path=$(echo "$response_body" | jq -r '.data.diffGcsPath // empty')
-        if [ -n "$diff_gcs_path" ]; then
-          echo "Diff stored at: $diff_gcs_path"
-        fi
-
-        file_count=$(echo "$files_json" | jq '. | length')
         echo "✓ Successfully tracked code changes for PR #$PR_NUMBER ($file_count files)"
 
 branding:
