@@ -67,6 +67,7 @@ runs:
         fi
 
         echo "Tracking code changes for PR #$PR_NUMBER in $REPOSITORY"
+        echo "Using API Key: ${{ inputs.pie_api_key }}"
 
         # Validate required fields
         if [ -z "$PR_NUMBER" ]; then
