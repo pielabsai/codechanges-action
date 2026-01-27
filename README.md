@@ -1,10 +1,12 @@
-# Pie Code Changes Tracker GitHub Action to increase Coverage
+# Pie Code Changes Tracker GitHub Action
 
-This GitHub Action automatically tracks and uploads pull request code changes to Pie's platform. It captures PR metadata including author, commit info, PR number, title, and URL.
+This GitHub Action automatically tracks and uploads pull request code changes to Pie's platform. It captures PR metadata, changed files, and the full unified diff to enable Pie's autonomous bug-fix capabilities.
 
 ## Features
 
 - Automatic extraction of PR information from GitHub context
+- **Full diff capture** - Unified diff uploaded to cloud storage for LLM analysis
+- **File change metadata** - Tracks which files changed with additions/deletions count
 - Secure API key authentication
 - Simple integration with existing GitHub workflows
 - Built-in validation and error handling
@@ -28,11 +30,22 @@ To use this action in your GitHub workflow, add the following step to your `.git
     pie_api_key: ${{ secrets.PIE_API_KEY }}
 ```
 
+### Disable diff capture (metadata only)
+
+```yaml
+- name: Track Code Changes in Pie
+  uses: pielabsai/codechanges-action@v1.0
+  with:
+    pie_api_key: ${{ secrets.PIE_API_KEY }}
+    include_diff: "false"
+```
+
 ## Inputs
 
-| Input | Description | Required |
-|-------|-------------|----------|
-| `pie_api_key` | Your Pie API key for authentication. Should be stored as a GitHub secret. | Yes |
+| Input | Description | Required | Default |
+|-------|-------------|----------|---------|
+| `pie_api_key` | Your Pie API key for authentication. Should be stored as a GitHub secret. | Yes | - |
+| `include_diff` | Include full unified diff in the upload | No | `true` |
 
 ## Captured Information
 
@@ -44,6 +57,14 @@ The action automatically captures and sends the following information:
 - **PR Title**: The title of the pull request
 - **PR URL**: The direct URL to the pull request
 - **Repository**: The repository name in format `owner/repo`
+- **Base Branch**: The target branch (e.g., `main`)
+- **Head Branch**: The source branch (e.g., `feature/add-login`)
+- **Files**: Array of changed files with metadata:
+  - `filename`: Path to the file
+  - `status`: Change type (added, modified, removed, renamed)
+  - `additions`: Number of lines added
+  - `deletions`: Number of lines deleted
+- **Diff**: Full unified diff (stored in cloud storage, path returned in response)
 
 ## Example Workflows
 
