@@ -1,11 +1,15 @@
 name: "Pie Code Changes Tracker"
-description: "Automatically track and upload PR code changes to Pie"
+description: "Automatically track and upload PR code changes including diffs to Pie"
 author: "Pie"
 
 inputs:
   pie_api_key:
     description: "Pie API Key for authentication"
     required: true
+  include_diff:
+    description: "Include full unified diff (default: true)"
+    required: false
+    default: "true"
 
 runs:
   using: "composite"
@@ -16,7 +20,7 @@ runs:
         # Extract PR information from GitHub context
         REPOSITORY="${{ github.repository }}"
         MERGE_COMMIT="${{ github.sha }}"
-        
+
         # Check if this is a pull_request event
         if [ "${{ github.event_name }}" = "pull_request" ]; then
           AUTHOR="${{ github.event.pull_request.user.login }}"
@@ -24,18 +28,22 @@ runs:
           PR_TITLE="${{ github.event.pull_request.title }}"
           PR_URL="${{ github.event.pull_request.html_url }}"
           MERGE_COMMIT="${{ github.event.pull_request.merge_commit_sha || github.sha }}"
+          BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
+          HEAD_BRANCH="${{ github.event.pull_request.head.ref }}"
         else
           # For push events, fetch PR info from the commit
           pr_data=$(curl -s \
             -H "Accept: application/vnd.github.v3+json" \
             -H "Authorization: token ${{ github.token }}" \
             "https://api.github.com/repos/$REPOSITORY/commits/$MERGE_COMMIT/pulls")
-          
+
           if [ "$(echo "$pr_data" | jq '. | length')" -gt 0 ]; then
             PR_NUMBER=$(echo "$pr_data" | jq -r '.[0].number')
             PR_TITLE=$(echo "$pr_data" | jq -r '.[0].title')
             PR_URL=$(echo "$pr_data" | jq -r '.[0].html_url')
             AUTHOR=$(echo "$pr_data" | jq -r '.[0].user.login')
+            BASE_BRANCH=$(echo "$pr_data" | jq -r '.[0].base.ref')
+            HEAD_BRANCH=$(echo "$pr_data" | jq -r '.[0].head.ref')
           else
             # Try to extract PR number from commit message (e.g., "Merge pull request #123")
             commit_message="${{ github.event.head_commit.message }}"
@@ -44,12 +52,16 @@ runs:
               PR_TITLE="$commit_message"
               PR_URL="https://github.com/$REPOSITORY/pull/$PR_NUMBER"
               AUTHOR="${{ github.actor }}"
+              BASE_BRANCH="${{ github.event.repository.default_branch }}"
+              HEAD_BRANCH=""
             else
               # No PR found - this might be a direct push
               AUTHOR="${{ github.actor }}"
               PR_NUMBER=""
               PR_TITLE="$commit_message"
               PR_URL=""
+              BASE_BRANCH=""
+              HEAD_BRANCH=""
             fi
           fi
         fi
@@ -62,6 +74,39 @@ runs:
           exit 1
         fi
 
+        # Fetch PR files (metadata: filename, status, additions, deletions)
+        echo "Fetching changed files..."
+        files_response=$(curl -s \
+          -H "Accept: application/vnd.github.v3+json" \
+          -H "Authorization: token ${{ github.token }}" \
+          "https://api.github.com/repos/$REPOSITORY/pulls/$PR_NUMBER/files?per_page=100")
+
+        # Extract file metadata into JSON array
+        files_json=$(echo "$files_response" | jq '[.[] | {
+          filename: .filename,
+          status: .status,
+          additions: .additions,
+          deletions: .deletions
+        }]')
+
+        # Fetch full unified diff if enabled
+        DIFF_CONTENT=""
+        if [ "${{ inputs.include_diff }}" = "true" ]; then
+          echo "Fetching unified diff..."
+          DIFF_CONTENT=$(curl -s \
+            -H "Accept: application/vnd.github.v3.diff" \
+            -H "Authorization: token ${{ github.token }}" \
+            "https://api.github.com/repos/$REPOSITORY/pulls/$PR_NUMBER")
+
+          # Truncate if too large (10MB limit for API payload)
+          DIFF_SIZE=${#DIFF_CONTENT}
+          if [ $DIFF_SIZE -gt 10000000 ]; then
+            echo "Warning: Diff too large ($DIFF_SIZE bytes), truncating to 10MB"
+            DIFF_CONTENT="${DIFF_CONTENT:0:10000000}"
+          fi
+          echo "Diff size: $DIFF_SIZE bytes"
+        fi
+
         # Prepare JSON payload using jq to properly escape values
         json_payload=$(jq -n \
           --arg author "$AUTHOR" \
@@ -70,14 +115,24 @@ runs:
           --arg prTitle "$PR_TITLE" \
           --arg prUrl "$PR_URL" \
           --arg repository "$REPOSITORY" \
+          --arg baseBranch "$BASE_BRANCH" \
+          --arg headBranch "$HEAD_BRANCH" \
+          --argjson files "$files_json" \
+          --arg diff "$DIFF_CONTENT" \
           '{
             author: $author,
             mergeCommit: $mergeCommit,
             prNumber: $prNumber,
             prTitle: $prTitle,
             prUrl: $prUrl,
-            repository: $repository
+            repository: $repository,
+            baseBranch: $baseBranch,
+            headBranch: $headBranch,
+            files: $files,
+            diff: $diff
           }')
+
+        echo "Uploading to Pie API..."
 
         # Upload to Pie API
         response=$(curl -X POST \
@@ -97,12 +152,19 @@ runs:
         # Check for successful response (200 or 201)
         if [ "$http_code" != "200" ] && [ "$http_code" != "201" ]; then
           echo "Error: Failed to upload code changes (HTTP $http_code)"
+          echo "Response: $response_body"
           exit 1
         fi
 
-        echo "✓ Successfully tracked code changes for PR #$PR_NUMBER"
+        # Extract diffGcsPath from response if present
+        diff_gcs_path=$(echo "$response_body" | jq -r '.data.diffGcsPath // empty')
+        if [ -n "$diff_gcs_path" ]; then
+          echo "Diff stored at: $diff_gcs_path"
+        fi
+
+        file_count=$(echo "$files_json" | jq '. | length')
+        echo "✓ Successfully tracked code changes for PR #$PR_NUMBER ($file_count files)"
 
 branding:
   icon: "git-pull-request"
   color: "purple"
-
