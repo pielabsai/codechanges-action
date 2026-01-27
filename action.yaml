@@ -37,7 +37,14 @@ runs:
             -H "Authorization: token ${{ github.token }}" \
             "https://api.github.com/repos/$REPOSITORY/commits/$MERGE_COMMIT/pulls")
 
-          if [ "$(echo "$pr_data" | jq '. | length')" -gt 0 ]; then
+          # Check if response is an array with at least one PR
+          is_array=$(echo "$pr_data" | jq -r 'if type == "array" then "yes" else "no" end')
+          array_len=0
+          if [ "$is_array" = "yes" ]; then
+            array_len=$(echo "$pr_data" | jq '. | length')
+          fi
+
+          if [ "$is_array" = "yes" ] && [ "$array_len" -gt 0 ]; then
             PR_NUMBER=$(echo "$pr_data" | jq -r '.[0].number')
             PR_TITLE=$(echo "$pr_data" | jq -r '.[0].title')
             PR_URL=$(echo "$pr_data" | jq -r '.[0].html_url')
@@ -81,13 +88,20 @@ runs:
           -H "Authorization: token ${{ github.token }}" \
           "https://api.github.com/repos/$REPOSITORY/pulls/$PR_NUMBER/files?per_page=100")
 
-        # Extract file metadata into JSON array
-        files_json=$(echo "$files_response" | jq '[.[] | {
-          filename: .filename,
-          status: .status,
-          additions: .additions,
-          deletions: .deletions
-        }]')
+        # Check if response is an array (success) or object (error)
+        files_is_array=$(echo "$files_response" | jq -r 'if type == "array" then "yes" else "no" end')
+        if [ "$files_is_array" = "yes" ]; then
+          # Extract file metadata into JSON array
+          files_json=$(echo "$files_response" | jq '[.[] | {
+            filename: .filename,
+            status: .status,
+            additions: .additions,
+            deletions: .deletions
+          }]')
+        else
+          echo "Warning: Could not fetch PR files. Response: $files_response"
+          files_json="[]"
+        fi
 
         file_count=$(echo "$files_json" | jq '. | length')
         echo "Found $file_count changed files"
