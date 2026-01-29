@@ -142,8 +142,9 @@ runs:
           echo "Diff size: $DIFF_SIZE bytes"
         fi
 
-        # Prepare JSON payload using jq to properly escape values
-        json_payload=$(jq -n \
+        # Prepare JSON payload using jq and write to temp file to avoid bash escaping issues
+        payload_file=$(mktemp)
+        jq -n \
           --arg author "$AUTHOR" \
           --arg mergeCommit "$MERGE_COMMIT" \
           --arg prNumber "$PR_NUMBER" \
@@ -165,20 +166,23 @@ runs:
             headBranch: $headBranch,
             files: $files,
             diff: $diff
-          }')
+          }' > "$payload_file"
 
         echo "Uploading to Pie API..."
 
-        # Upload to Pie API
+        # Upload to Pie API using file to preserve JSON integrity
         response=$(curl -X POST \
           "https://api.pie.inc/v1/app/codechanges" \
           -H "accept: application/json" \
           -H "Content-Type: application/json" \
           -H "X-Requested-With: XMLHttpRequest" \
           -H "X-API-Key: $PIE_API_KEY" \
-          -d "$json_payload" \
+          -d "@$payload_file" \
           -w "\nHTTP_STATUS:%{http_code}" \
           -s)
+
+        # Clean up temp file
+        rm -f "$payload_file"
 
         # Extract HTTP status code
         http_code=$(echo "$response" | grep "HTTP_STATUS:" | cut -d':' -f2)
