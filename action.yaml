@@ -16,25 +16,44 @@ runs:
   steps:
     - name: Extract and Upload Code Changes
       shell: bash
+      env:
+        GH_REPOSITORY: ${{ github.repository }}
+        GH_SHA: ${{ github.sha }}
+        GH_EVENT_NAME: ${{ github.event_name }}
+        GH_TOKEN: ${{ github.token }}
+        GH_ACTOR: ${{ github.actor }}
+        PR_USER_LOGIN: ${{ github.event.pull_request.user.login }}
+        PR_NUMBER_INPUT: ${{ github.event.pull_request.number }}
+        PR_TITLE_INPUT: ${{ github.event.pull_request.title }}
+        PR_URL_INPUT: ${{ github.event.pull_request.html_url }}
+        PR_MERGE_COMMIT: ${{ github.event.pull_request.merge_commit_sha }}
+        PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+        PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        INCLUDE_DIFF: ${{ inputs.include_diff }}
+        PIE_API_KEY: ${{ inputs.pie_api_key }}
       run: |
-        # Extract PR information from GitHub context
-        REPOSITORY="${{ github.repository }}"
-        MERGE_COMMIT="${{ github.sha }}"
+        # Extract PR information from environment variables (safely escaped)
+        REPOSITORY="$GH_REPOSITORY"
+        MERGE_COMMIT="$GH_SHA"
 
         # Check if this is a pull_request event
-        if [ "${{ github.event_name }}" = "pull_request" ]; then
-          AUTHOR="${{ github.event.pull_request.user.login }}"
-          PR_NUMBER="${{ github.event.pull_request.number }}"
-          PR_TITLE="${{ github.event.pull_request.title }}"
-          PR_URL="${{ github.event.pull_request.html_url }}"
-          MERGE_COMMIT="${{ github.event.pull_request.merge_commit_sha || github.sha }}"
-          BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
-          HEAD_BRANCH="${{ github.event.pull_request.head.ref }}"
+        if [ "$GH_EVENT_NAME" = "pull_request" ]; then
+          AUTHOR="$PR_USER_LOGIN"
+          PR_NUMBER="$PR_NUMBER_INPUT"
+          PR_TITLE="$PR_TITLE_INPUT"
+          PR_URL="$PR_URL_INPUT"
+          if [ -n "$PR_MERGE_COMMIT" ]; then
+            MERGE_COMMIT="$PR_MERGE_COMMIT"
+          fi
+          BASE_BRANCH="$PR_BASE_REF"
+          HEAD_BRANCH="$PR_HEAD_REF"
         else
           # For push events, fetch PR info from the commit
           pr_data=$(curl -s \
             -H "Accept: application/vnd.github.v3+json" \
-            -H "Authorization: token ${{ github.token }}" \
+            -H "Authorization: token $GH_TOKEN" \
             "https://api.github.com/repos/$REPOSITORY/commits/$MERGE_COMMIT/pulls")
 
           # Check if response is an array with at least one PR
@@ -53,19 +72,18 @@ runs:
             HEAD_BRANCH=$(echo "$pr_data" | jq -r '.[0].head.ref')
           else
             # Try to extract PR number from commit message (e.g., "Merge pull request #123")
-            commit_message="${{ github.event.head_commit.message }}"
-            if [[ "$commit_message" =~ \#([0-9]+) ]]; then
+            if [[ "$COMMIT_MESSAGE" =~ \#([0-9]+) ]]; then
               PR_NUMBER="${BASH_REMATCH[1]}"
-              PR_TITLE="$commit_message"
+              PR_TITLE="$COMMIT_MESSAGE"
               PR_URL="https://github.com/$REPOSITORY/pull/$PR_NUMBER"
-              AUTHOR="${{ github.actor }}"
-              BASE_BRANCH="${{ github.event.repository.default_branch }}"
+              AUTHOR="$GH_ACTOR"
+              BASE_BRANCH="$DEFAULT_BRANCH"
               HEAD_BRANCH=""
             else
               # No PR found - this might be a direct push
-              AUTHOR="${{ github.actor }}"
+              AUTHOR="$GH_ACTOR"
               PR_NUMBER=""
-              PR_TITLE="$commit_message"
+              PR_TITLE="$COMMIT_MESSAGE"
               PR_URL=""
               BASE_BRANCH=""
               HEAD_BRANCH=""
@@ -85,7 +103,7 @@ runs:
         echo "Fetching changed files..."
         files_response=$(curl -s \
           -H "Accept: application/vnd.github.v3+json" \
-          -H "Authorization: token ${{ github.token }}" \
+          -H "Authorization: token $GH_TOKEN" \
           "https://api.github.com/repos/$REPOSITORY/pulls/$PR_NUMBER/files?per_page=100")
 
         # Check if response is an array (success) or object (error)
@@ -108,11 +126,11 @@ runs:
 
         # Fetch full unified diff if enabled
         DIFF_CONTENT=""
-        if [ "${{ inputs.include_diff }}" = "true" ]; then
+        if [ "$INCLUDE_DIFF" = "true" ]; then
           echo "Fetching unified diff..."
           DIFF_CONTENT=$(curl -s \
             -H "Accept: application/vnd.github.v3.diff" \
-            -H "Authorization: token ${{ github.token }}" \
+            -H "Authorization: token $GH_TOKEN" \
             "https://api.github.com/repos/$REPOSITORY/pulls/$PR_NUMBER")
 
           # Truncate if too large (10MB limit for API payload)
@@ -157,7 +175,7 @@ runs:
           -H "accept: application/json" \
           -H "Content-Type: application/json" \
           -H "X-Requested-With: XMLHttpRequest" \
-          -H "X-API-Key: ${{ inputs.pie_api_key }}" \
+          -H "X-API-Key: $PIE_API_KEY" \
           -d "$json_payload" \
           -w "\nHTTP_STATUS:%{http_code}" \
           -s)
